@@ -62,3 +62,11 @@ def test_real_catalogue_cards(parser_cfg):
     assert len(companies) == 3
     assert companies[0].nom == "YT SuccessLab"
     assert companies[0].source_url == "https://pfebooks.com/catalogue/2026/yt-successlab/"
+
+
+def test_listing_sector_from_category_ids(parser_cfg):
+    html = (Path(__file__).parent / "fixtures" / "listing_page1.html").read_text(encoding="utf-8")
+    companies = parse_catalogue(html, parser_cfg, BASE)
+    assert len(companies) == 8
+    assert all(c.secteur for c in companies)
+    assert companies[0].secteur == "Développement Web & Mobile"

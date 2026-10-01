@@ -31,14 +31,12 @@ crawl:
   next_page_selector: "a.next.page-numbers"
   raw_dir: "data/raw"
   sample_count: 5
-  # Selectors for company detail pages: to be completed after inspecting sampled raw pages.
   detail:
-    sector: ""
-    city: ""
-    description: ""
-    website:
-      selector: ""
-      attribute: "href"
+    company_heading_prefixes: ["l'entreprise", "a propos", "à propos"]
+    max_description_chars: 500
+    excluded_domains: ["pfebooks.com", "facebook.com", "linkedin.com", "instagram.com", "twitter.com", "x.com", "youtube.com", "wa.me", "whatsapp.com", "google.com", "t.me"]
+    generic_email_keywords: ["contact", "info", "rh", "hr", "recrut", "stage", "internship", "job", "career", "carriere", "candidat", "pfe", "talent", "hello", "bonjour"]
+    cities: ["Tunis", "Sfax", "Sousse", "Ariana", "Bizerte", "Monastir", "Nabeul", "Ben Arous", "La Marsa", "Lac 2", "Les Berges du Lac", "Charguia", "Ghazela", "Mahdia", "Gabès", "Kairouan", "Gafsa", "Djerba", "Hammamet", "Manouba", "Mégrine", "Paris", "Lyon", "Montréal", "Casablanca", "Dubaï", "Genève"]
 
 enrichment:
   max_description_chars: 400

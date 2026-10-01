@@ -12,6 +12,8 @@ class Company:
     site_web: str = ""
     ville: str = ""
     source_url: str = ""
+    email_contact_generique: str = ""
+    page_recrutement: str = ""
     extra: dict[str, str] = field(default_factory=dict)
 
 

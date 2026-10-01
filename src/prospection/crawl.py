@@ -43,24 +43,62 @@ def crawl_listing(client: PoliteClient, cfg: dict[str, Any], raw_dir: Path) -> l
     return companies
 
 
-def _first_text(soup: BeautifulSoup, selector: str) -> str:
-    node = soup.select_one(selector) if selector else None
-    return " ".join(node.get_text(" ", strip=True).split()) if node else ""
+def _section_text(soup: BeautifulSoup, heading_prefixes: list[str]) -> str:
+    """Text following the first heading whose label starts with one of the prefixes."""
+    for heading in soup.select("h1, h2, h3"):
+        label = heading.get_text(" ", strip=True).lower().replace("\u2019", "'")
+        if any(label.startswith(prefix) for prefix in heading_prefixes):
+            parts: list[str] = []
+            for sibling in heading.find_next_siblings():
+                if sibling.name in ("h1", "h2", "h3"):
+                    break
+                parts.append(sibling.get_text(" ", strip=True))
+            return " ".join(" ".join(parts).split())
+    return ""
+
+
+def _external_website(soup: BeautifulSoup, excluded_domains: list[str]) -> str:
+    for link in soup.find_all("a", href=True):
+        href = link["href"].strip()
+        if not href.startswith(("http://", "https://")):
+            continue
+        host = urlparse(href).netloc.lower()
+        if any(domain in host for domain in excluded_domains):
+            continue
+        return href
+    return ""
+
+
+def _generic_mailto(soup: BeautifulSoup, keywords: list[str]) -> str:
+    """Return a published mailbox only when its local part is functional, never a personal one."""
+    for link in soup.find_all("a", href=True):
+        if not link["href"].lower().startswith("mailto:"):
+            continue
+        address = link["href"][7:].split("?")[0].strip().lower()
+        local = address.split("@")[0]
+        if "@" in address and any(keyword in local for keyword in keywords):
+            return address
+    return ""
+
+
+def _first_city(text: str, cities: list[str]) -> str:
+    best: tuple[int, str] | None = None
+    for city in cities:
+        match = re.search(rf"\b{re.escape(city)}\b", text)
+        if match and (best is None or match.start() < best[0]):
+            best = (match.start(), city)
+    return best[1] if best else ""
 
 
 def parse_detail(html: str, detail_cfg: dict[str, Any], base_url: str) -> dict[str, str]:
     soup = BeautifulSoup(html, "lxml")
-    fields = {
-        "secteur": _first_text(soup, detail_cfg["sector"]),
-        "ville": _first_text(soup, detail_cfg["city"]),
-        "description": _first_text(soup, detail_cfg["description"]),
-        "site_web": "",
+    about = _section_text(soup, detail_cfg["company_heading_prefixes"])
+    return {
+        "description": about[: detail_cfg["max_description_chars"]],
+        "ville": _first_city(about, detail_cfg["cities"]),
+        "site_web": _external_website(soup, detail_cfg["excluded_domains"]),
+        "email_contact_generique": _generic_mailto(soup, detail_cfg["generic_email_keywords"]),
     }
-    website_sel = detail_cfg["website"]["selector"]
-    link = soup.select_one(website_sel) if website_sel else None
-    if link and link.get(detail_cfg["website"]["attribute"]):
-        fields["site_web"] = urljoin(base_url, link[detail_cfg["website"]["attribute"]].strip())
-    return fields
 
 
 def crawl_details(

@@ -23,6 +23,16 @@ def _text(node: Tag, selector: str) -> str:
     return " ".join(found.get_text(" ", strip=True).split()) if found else ""
 
 
+def _card_sector(card: Tag, categories: dict[str, str]) -> str:
+    labels: list[str] = []
+    for node in [card, *card.find_all(True)]:
+        for css_class in node.get("class", []):
+            label = categories.get(css_class)
+            if label and label not in labels:
+                labels.append(label)
+    return ", ".join(labels)
+
+
 def _attr(node: Tag, spec: dict[str, str] | None, base_url: str) -> str:
     if not spec or not spec.get("selector"):
         return ""
@@ -33,9 +43,21 @@ def _attr(node: Tag, spec: dict[str, str] | None, base_url: str) -> str:
     return urljoin(base_url, value) if value else ""
 
 
+def _category_names(soup: BeautifulSoup, parser_cfg: dict[str, Any]) -> dict[str, str]:
+    """Map category term ids (term-id-N CSS classes) to their labels using the category links."""
+    names: dict[str, str] = {}
+    for link in soup.select(parser_cfg.get("category_link", "a[href*='/category/']")):
+        label = " ".join(link.get_text(" ", strip=True).split())
+        for css_class in link.get("class", []):
+            if css_class.startswith("term-id-") and label:
+                names[css_class] = label
+    return names
+
+
 def parse_catalogue(html: str, parser_cfg: dict[str, Any], base_url: str) -> list[Company]:
     soup = BeautifulSoup(html, "lxml")
     cards = soup.select(parser_cfg["card"])
+    categories = _category_names(soup, parser_cfg)
     if not cards:
         raise ParserError(f"No element matches card selector {parser_cfg['card']!r}")
 
@@ -55,7 +77,7 @@ def parse_catalogue(html: str, parser_cfg: dict[str, Any], base_url: str) -> lis
         companies.append(
             Company(
                 nom=name,
-                secteur=_text(card, parser_cfg["sector"]),
+                secteur=_text(card, parser_cfg["sector"]) or _card_sector(card, categories),
                 description=_text(card, parser_cfg["description"]),
                 site_web=website,
                 ville=_text(card, parser_cfg["city"]),

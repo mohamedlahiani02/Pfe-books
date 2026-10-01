@@ -35,6 +35,27 @@ def test_crawl_listing_follows_pagination(tmp_path):
     assert len(list(tmp_path.glob("page_*.html"))) == 2
 
 
-def test_parse_detail_with_empty_selectors_returns_blanks():
+FIX = Path(__file__).parent / "fixtures"
+
+
+def _detail(name: str) -> dict[str, str]:
     cfg = load_config(CONFIG)["crawl"]["detail"]
-    assert parse_detail("<html></html>", cfg, "https://x/")["site_web"] == ""
+    return parse_detail((FIX / name).read_text(encoding="utf-8"), cfg, "https://pfebooks.com/catalogue/x/")
+
+
+def test_detail_extracts_site_email_and_city():
+    data = _detail("detail_21c.html")
+    assert data["site_web"] == "https://21c-digital.com/"
+    assert data["email_contact_generique"] == "contact@21c-digital.com"
+    assert data["ville"] == "Sfax"
+    assert data["description"].startswith("21C Digital")
+
+
+def test_detail_functional_mailbox_accepted():
+    assert _detail("detail_actia.html")["email_contact_generique"] == "aes-stages@actia.com"
+
+
+def test_detail_rejects_non_functional_email_and_missing_site():
+    data = _detail("detail_acubei.html")
+    assert data["email_contact_generique"] == ""
+    assert data["site_web"] == ""
