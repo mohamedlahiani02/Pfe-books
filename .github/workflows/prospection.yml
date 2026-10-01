@@ -1,0 +1,54 @@
+name: prospection
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Process only the first N companies (0 = all)"
+        default: "0"
+  push:
+    branches: [main]
+    paths: ["src/**", "config/**", "requirements.txt", ".github/workflows/prospection.yml"]
+
+concurrency:
+  group: prospection
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+      - name: Crawl, parse, enrich, export
+        env:
+          PYTHONPATH: src
+          LIMIT: ${{ inputs.limit || '0' }}
+        run: python -m prospection --crawl --limit "$LIMIT"
+      - name: Select raw page samples for inspection
+        run: |
+          mkdir -p data/samples
+          ls data/raw/listing | head -2 | while read f; do cp "data/raw/listing/$f" data/samples/; done
+          ls data/raw/details | head -5 | while read f; do cp "data/raw/details/$f" "data/samples/detail_$f"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prospection-data
+          path: data
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/entreprises.csv data/entreprises.xlsx data/rapport_qualite.md data/samples
+          git commit -m "Update prospection dataset" || exit 0
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

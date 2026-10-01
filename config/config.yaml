@@ -1,0 +1,54 @@
+http:
+  user_agent: "ForumProspectionBot/1.0 (school forum research; contact: mohamed.lahiani@ensi-uma.tn)"
+  timeout_seconds: 15
+  max_retries: 2
+  backoff_factor: 1.0
+  min_interval_seconds: 1.0
+
+catalogue:
+  url: "https://pfebooks.com/catalogue/"
+  local_html: "input/catalogue.html"
+  expected_count: 380
+  count_tolerance: 0.05
+
+# CSS selectors, to be validated against the real catalogue HTML.
+parser:
+  card: "div.post-item"
+  name: "h3.title a"
+  sector: ""
+  description: ""
+  city: ""
+  website:
+    selector: ""
+    attribute: "href"
+  detail_url:
+    selector: "a.post-see-btn"
+    attribute: "href"
+  extra_fields: {}
+
+crawl:
+  max_pages: 60
+  next_page_selector: "a.next.page-numbers"
+  raw_dir: "data/raw"
+  sample_count: 5
+  # Selectors for company detail pages: to be completed after inspecting sampled raw pages.
+  detail:
+    sector: ""
+    city: ""
+    description: ""
+    website:
+      selector: ""
+      attribute: "href"
+
+enrichment:
+  max_description_chars: 400
+  careers_keywords: ["carriere", "carrieres", "career", "careers", "recrutement", "recruitment", "jobs", "emploi", "rejoignez", "join-us", "work-with-us"]
+  contact_keywords: ["contact", "nous-contacter", "contactez"]
+  generic_email_local_parts: ["contact", "info", "infos", "rh", "hr", "recrutement", "recruitment", "jobs", "careers", "carrieres", "hello", "bonjour", "commercial"]
+  size_pattern: "(\\d[\\d\\s.,]{0,8}\\+?)\\s*(?:employ[ée]s|collaborateurs|salari[ée]s|employees|people|personnes)"
+
+output:
+  csv: "data/entreprises.csv"
+  xlsx: "data/entreprises.xlsx"
+  report: "data/rapport_qualite.md"
+  default_status: "a_contacter"
