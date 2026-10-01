@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
@@ -63,19 +64,38 @@ def main(argv: list[str] | None = None) -> int:
     if args.crawl:
         detail_status = crawl_details(client, companies, cfg, raw_dir / "details")
 
-    rows: list[tuple[Company, Enrichment]] = []
-    for position, company in enumerate(companies, start=1):
-        enrichment = Enrichment() if args.no_enrich else enrich_company(company, client, cfg["enrichment"])
+    out = cfg["output"]
+    today = date.today()
+
+    def export(rows: list[tuple[Company, Enrichment]]) -> None:
+        frame = build_frame(rows, out["default_status"], today)
+        write_outputs(frame, Path(out["csv"]), Path(out["xlsx"]))
+        write_report(frame, rows, expected, warning, Path(out["report"]))
+        logger.info("Wrote %d rows", len(frame))
+
+    def status_of(company: Company, enrichment: Enrichment) -> Enrichment:
         if detail_status.get(company.source_url, "ok") != "ok":
             enrichment.status = detail_status[company.source_url]
-        rows.append((company, enrichment))
-        logger.info("%d/%d %s -> %s", position, len(companies), company.nom, enrichment.status)
+        return enrichment
 
-    out = cfg["output"]
-    frame = build_frame(rows, out["default_status"], date.today())
-    write_outputs(frame, Path(out["csv"]), Path(out["xlsx"]))
-    write_report(frame, rows, expected, warning, Path(out["report"]))
-    logger.info("Wrote %d rows", len(frame))
+    # Checkpoint: the catalogue data is exported before the slower website enrichment starts.
+    export([(c, status_of(c, Enrichment())) for c in companies])
+    if args.no_enrich:
+        return 0
+
+    def work(company: Company) -> Enrichment:
+        try:
+            return status_of(company, enrich_company(company, client, cfg["enrichment"]))
+        except Exception as exc:  # noqa: BLE001 - one company must never abort the whole run
+            logger.warning("Enrichment crashed for %s: %s", company.nom, exc)
+            return Enrichment(status="enrichment_error")
+
+    with ThreadPoolExecutor(max_workers=cfg["http"]["workers"]) as pool:
+        results = list(pool.map(work, companies))
+    rows = list(zip(companies, results))
+    for position, (company, enrichment) in enumerate(rows, start=1):
+        logger.info("%d/%d %s -> %s", position, len(rows), company.nom, enrichment.status)
+    export(rows)
     return 0
 
 

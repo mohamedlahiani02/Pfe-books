@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -28,24 +29,38 @@ class PoliteClient:
         self._timeout: float = http_cfg["timeout_seconds"]
         self._interval: float = http_cfg["min_interval_seconds"]
         self._last_request: dict[str, float] = {}
+        self._host_locks: dict[str, threading.Lock] = {}
+        self._registry_lock = threading.Lock()
         self._robots: dict[str, RobotFileParser | None] = {}
-        retry = Retry(
+        self._local = threading.local()
+        self._retry = Retry(
             total=http_cfg["max_retries"],
             backoff_factor=http_cfg["backoff_factor"],
             status_forcelist=(429, 502, 503, 504),
             allowed_methods=("GET",),
             respect_retry_after_header=True,
         )
-        self._session = requests.Session()
-        self._session.headers["User-Agent"] = self._ua
-        self._session.mount("http://", HTTPAdapter(max_retries=retry))
-        self._session.mount("https://", HTTPAdapter(max_retries=retry))
+
+    @property
+    def _session(self) -> requests.Session:
+        session = getattr(self._local, "session", None)
+        if session is None:
+            session = requests.Session()
+            session.headers["User-Agent"] = self._ua
+            session.mount("http://", HTTPAdapter(max_retries=self._retry))
+            session.mount("https://", HTTPAdapter(max_retries=self._retry))
+            self._local.session = session
+        return session
 
     def _throttle(self, host: str) -> None:
-        wait = self._interval - (time.monotonic() - self._last_request.get(host, 0.0))
-        if wait > 0:
-            time.sleep(wait)
-        self._last_request[host] = time.monotonic()
+        """Serialise requests per host so each domain receives at most one request per interval."""
+        with self._registry_lock:
+            lock = self._host_locks.setdefault(host, threading.Lock())
+        with lock:
+            wait = self._interval - (time.monotonic() - self._last_request.get(host, 0.0))
+            if wait > 0:
+                time.sleep(wait)
+            self._last_request[host] = time.monotonic()
 
     def _raw_get(self, url: str) -> requests.Response:
         self._throttle(urlparse(url).netloc)

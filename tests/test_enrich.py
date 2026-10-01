@@ -18,3 +18,26 @@ def test_find_link_stays_on_same_site():
     html = '<a href="https://other.com/careers">c</a><a href="/carrieres">Carrieres</a>'
     link = _find_link(BeautifulSoup(html, "lxml"), "https://acme.example/", ["carrieres", "careers"])
     assert link == "https://acme.example/carrieres"
+
+
+def test_polite_client_enforces_interval_per_host_across_threads(monkeypatch):
+    import threading
+    import time
+
+    from prospection.http import PoliteClient
+
+    client = PoliteClient({"user_agent": "t", "timeout_seconds": 1, "max_retries": 0,
+                           "backoff_factor": 0, "min_interval_seconds": 0.2})
+    stamps: list[float] = []
+
+    def hit() -> None:
+        client._throttle("example.org")
+        stamps.append(time.monotonic())
+
+    threads = [threading.Thread(target=hit) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    stamps.sort()
+    assert all(b - a >= 0.18 for a, b in zip(stamps, stamps[1:]))

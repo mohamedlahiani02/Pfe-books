@@ -1,6 +1,7 @@
 http:
   user_agent: "ForumProspectionBot/1.0 (school forum research; contact: mohamed.lahiani@ensi-uma.tn)"
-  timeout_seconds: 15
+  timeout_seconds: 10
+  workers: 16
   max_retries: 2
   backoff_factor: 1.0
   min_interval_seconds: 1.0

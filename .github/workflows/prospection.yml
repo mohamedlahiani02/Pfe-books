@@ -31,20 +31,24 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m pytest -q
       - name: Crawl, parse, enrich, export
+        timeout-minutes: 90
         env:
           PYTHONPATH: src
           LIMIT: ${{ inputs.limit || '0' }}
         run: python -m prospection --crawl --limit "$LIMIT"
       - name: Select raw page samples for inspection
+        if: always()
         run: |
           mkdir -p data/samples
           ls data/raw/listing | head -2 | while read f; do cp "data/raw/listing/$f" data/samples/; done
           ls data/raw/details | head -5 | while read f; do cp "data/raw/details/$f" "data/samples/detail_$f"; done
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: prospection-data
           path: data
       - name: Commit results
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
