@@ -59,3 +59,9 @@ def test_detail_rejects_non_functional_email_and_missing_site():
     data = _detail("detail_acubei.html")
     assert data["email_contact_generique"] == ""
     assert data["site_web"] == ""
+
+
+def test_detail_ignores_malformed_links():
+    cfg = load_config(CONFIG)["crawl"]["detail"]
+    html = '<a href="http://[broken">x</a><a href="https://ok.example/">ok</a>'
+    assert parse_detail(html, cfg, "https://pfebooks.com/")["site_web"] == "https://ok.example/"

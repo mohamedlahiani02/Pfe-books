@@ -62,7 +62,11 @@ def _external_website(soup: BeautifulSoup, excluded_domains: list[str]) -> str:
         href = link["href"].strip()
         if not href.startswith(("http://", "https://")):
             continue
-        host = urlparse(href).netloc.lower()
+        try:
+            host = urlparse(href).netloc.lower()
+        except ValueError:
+            logger.debug("Malformed link ignored: %s", href)
+            continue
         if any(domain in host for domain in excluded_domains):
             continue
         return href
