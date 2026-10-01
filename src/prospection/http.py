@@ -26,7 +26,9 @@ class RobotsUnreachable(Exception):
 class PoliteClient:
     def __init__(self, http_cfg: dict[str, Any]) -> None:
         self._ua: str = http_cfg["user_agent"]
-        self._timeout: float = http_cfg["timeout_seconds"]
+        self._timeout: tuple[float, float] = (http_cfg["connect_timeout_seconds"], http_cfg["timeout_seconds"])
+        self._total_timeout: float = http_cfg["total_timeout_seconds"]
+        self._max_bytes: int = http_cfg["max_response_bytes"]
         self._interval: float = http_cfg["min_interval_seconds"]
         self._last_request: dict[str, float] = {}
         self._host_locks: dict[str, threading.Lock] = {}
@@ -38,7 +40,7 @@ class PoliteClient:
             backoff_factor=http_cfg["backoff_factor"],
             status_forcelist=(429, 502, 503, 504),
             allowed_methods=("GET",),
-            respect_retry_after_header=True,
+            respect_retry_after_header=False,
         )
 
     @property
@@ -64,7 +66,24 @@ class PoliteClient:
 
     def _raw_get(self, url: str) -> requests.Response:
         self._throttle(urlparse(url).netloc)
-        return self._session.get(url, timeout=self._timeout, allow_redirects=True)
+        response = self._session.get(url, timeout=self._timeout, allow_redirects=True, stream=True)
+        deadline = time.monotonic() + self._total_timeout
+        body = bytearray()
+        try:
+            while True:
+                chunk = response.raw.read1(8192, decode_content=True)
+                if not chunk:
+                    break
+                body.extend(chunk)
+                if len(body) > self._max_bytes:
+                    break
+                if time.monotonic() > deadline:
+                    raise requests.Timeout(f"Total download time exceeded for {url}")
+        finally:
+            response.close()
+        response._content = bytes(body)
+        response._content_consumed = True
+        return response
 
     def _load_robots(self, origin: str) -> RobotFileParser | None:
         """Return a parser, or None when robots.txt is absent (everything allowed)."""

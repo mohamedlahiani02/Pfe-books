@@ -1,6 +1,9 @@
 http:
   user_agent: "ForumProspectionBot/1.0 (school forum research; contact: mohamed.lahiani@ensi-uma.tn)"
+  connect_timeout_seconds: 5
   timeout_seconds: 10
+  total_timeout_seconds: 20
+  max_response_bytes: 2000000
   workers: 16
   max_retries: 2
   backoff_factor: 1.0
@@ -40,6 +43,7 @@ crawl:
     cities: ["Tunis", "Sfax", "Sousse", "Ariana", "Bizerte", "Monastir", "Nabeul", "Ben Arous", "La Marsa", "Lac 2", "Les Berges du Lac", "Charguia", "Ghazela", "Mahdia", "Gabès", "Kairouan", "Gafsa", "Djerba", "Hammamet", "Manouba", "Mégrine", "Paris", "Lyon", "Montréal", "Casablanca", "Dubaï", "Genève"]
 
 enrichment:
+  deadline_seconds: 1200
   max_description_chars: 400
   careers_keywords: ["carriere", "carrieres", "career", "careers", "recrutement", "recruitment", "jobs", "emploi", "rejoignez", "join-us", "work-with-us"]
   contact_keywords: ["contact", "nous-contacter", "contactez"]

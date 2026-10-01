@@ -31,7 +31,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m pytest -q
       - name: Crawl, parse, enrich, export
-        timeout-minutes: 90
+        timeout-minutes: 45
         env:
           PYTHONPATH: src
           LIMIT: ${{ inputs.limit || '0' }}

@@ -4,7 +4,8 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import date
 from pathlib import Path
 
@@ -90,8 +91,16 @@ def main(argv: list[str] | None = None) -> int:
             logger.warning("Enrichment crashed for %s: %s", company.nom, exc)
             return Enrichment(status="enrichment_error")
 
-    with ThreadPoolExecutor(max_workers=cfg["http"]["workers"]) as pool:
-        results = list(pool.map(work, companies))
+    results: list[Enrichment] = [Enrichment(status="enrichment_timeout") for _ in companies]
+    pool = ThreadPoolExecutor(max_workers=cfg["http"]["workers"])
+    futures = {pool.submit(work, company): index for index, company in enumerate(companies)}
+    try:
+        for future in as_completed(futures, timeout=cfg["enrichment"]["deadline_seconds"]):
+            results[futures[future]] = future.result()
+    except FutureTimeout:
+        logger.warning("Enrichment deadline reached; unfinished companies marked enrichment_timeout")
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     rows = list(zip(companies, results))
     for position, (company, enrichment) in enumerate(rows, start=1):
         logger.info("%d/%d %s -> %s", position, len(rows), company.nom, enrichment.status)
